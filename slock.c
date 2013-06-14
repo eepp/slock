@@ -13,6 +13,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
+#include <time.h>
 #include <sys/types.h>
 #include <X11/keysym.h>
 #include <X11/Xlib.h>
@@ -165,12 +166,18 @@ unlockscreen(Display *dpy, Lock *lock) {
 	free(lock);
 }
 
+static void gen_random_pastel(XColor* color) {
+	color->red = ((((unsigned short) rand() & 0xff) >> 1) + 128) << 8;
+	color->green = ((((unsigned short) rand() & 0xff) >> 1) + 128) << 8;
+	color->blue = ((((unsigned short) rand() & 0xff) >> 1) + 128) << 8;
+}
+
 static Lock *
 lockscreen(Display *dpy, int screen) {
 	char curs[] = {0, 0, 0, 0, 0, 0, 0, 0};
 	unsigned int len;
 	Lock *lock;
-	XColor color, dummy;
+	XColor color;
 	XSetWindowAttributes wa;
 	Cursor invisible;
 
@@ -182,19 +189,25 @@ lockscreen(Display *dpy, int screen) {
 		return NULL;
 
 	lock->screen = screen;
-
 	lock->root = RootWindow(dpy, lock->screen);
 
 	/* init */
 	wa.override_redirect = 1;
-	wa.background_pixel = BlackPixel(dpy, lock->screen);
 	lock->win = XCreateWindow(dpy, lock->root, 0, 0, DisplayWidth(dpy, lock->screen), DisplayHeight(dpy, lock->screen),
 			0, DefaultDepth(dpy, lock->screen), CopyFromParent,
 			DefaultVisual(dpy, lock->screen), CWOverrideRedirect | CWBackPixel, &wa);
-	XAllocNamedColor(dpy, DefaultColormap(dpy, lock->screen), COLOR2, &color, &dummy);
-	lock->colors[1] = color.pixel;
-	XAllocNamedColor(dpy, DefaultColormap(dpy, lock->screen), COLOR1, &color, &dummy);
+	
+	/* locked color */
+	gen_random_pastel(&color);
+	XAllocColor(dpy, DefaultColormap(dpy, lock->screen), &color);
 	lock->colors[0] = color.pixel;
+	XSetWindowBackground(dpy, lock->win, lock->colors[0]);
+	
+	/* trying to unlock color */
+	gen_random_pastel(&color);
+	XAllocColor(dpy, DefaultColormap(dpy, lock->screen), &color);
+	lock->colors[1] = color.pixel;
+	
 	lock->pmap = XCreateBitmapFromData(dpy, lock->win, curs, 8, 8);
 	invisible = XCreatePixmapCursor(dpy, lock->pmap, lock->pmap, &color, &color, 0, 0);
 	XDefineCursor(dpy, lock->win, invisible);
@@ -239,8 +252,10 @@ main(int argc, char **argv) {
 	Display *dpy;
 	int screen;
 
+	srand(time(NULL));
+
 	if((argc == 2) && !strcmp("-v", argv[1]))
-		die("slock-%s, © 2006-2012 Anselm R Garbe\n", VERSION);
+		die("slock-%s, © 2006-2012 Anselm R Garbe, 2013 Philippe Proulx\n", VERSION);
 	else if(argc != 1)
 		usage();
 
