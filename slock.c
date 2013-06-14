@@ -5,6 +5,7 @@
 #include <shadow.h>
 #endif
 
+#include <math.h>
 #include <ctype.h>
 #include <errno.h>
 #include <pwd.h>
@@ -30,6 +31,18 @@ typedef struct {
 	Pixmap pmap;
 	unsigned long colors[2];
 } Lock;
+
+struct rgb {
+    double r;       // percent
+    double g;       // percent
+    double b;       // percent
+};
+
+struct hsv {
+    double h;       // angle in degrees
+    double s;       // percent
+    double v;       // percent
+};
 
 static Lock **locks;
 static int nscreens;
@@ -166,10 +179,79 @@ unlockscreen(Display *dpy, Lock *lock) {
 	free(lock);
 }
 
-static void gen_random_pastel(XColor* color) {
-	color->red = ((((unsigned short) rand() & 0xff) >> 1) + 128) << 8;
-	color->green = ((((unsigned short) rand() & 0xff) >> 1) + 128) << 8;
-	color->blue = ((((unsigned short) rand() & 0xff) >> 1) + 128) << 8;
+/* credit: <http://stackoverflow.com/questions/3018313/algorithm-to-convert-rgb-to-hsv-and-hsv-to-rgb> */
+static void hsv2rgb(struct hsv* in, struct rgb* out) {
+    double hh, p, q, t, ff;
+    long i;
+
+    if (in->s <= 0.0) {       // < is bogus, just shuts up warnings
+        if (isnan(in->h)) {   // in.h == NAN
+            out->r = in->v;
+            out->g = in->v;
+            out->b = in->v;
+            return;
+        }
+        // error - should never happen
+        out->r = 0.0;
+        out->g = 0.0;
+        out->b = 0.0;
+        return;
+    }
+    hh = in->h;
+    if (hh >= 360.0) hh = 0.0;
+    hh /= 60.0;
+    i = (long) hh;
+    ff = hh - i;
+    p = in->v * (1.0 - in->s);
+    q = in->v * (1.0 - (in->s * ff));
+    t = in->v * (1.0 - (in->s * (1.0 - ff)));
+
+    switch(i) {
+    case 0:
+        out->r = in->v;
+        out->g = t;
+        out->b = p;
+        break;
+    case 1:
+        out->r = q;
+        out->g = in->v;
+        out->b = p;
+        break;
+    case 2:
+        out->r = p;
+        out->g = in->v;
+        out->b = t;
+        break;
+
+    case 3:
+        out->r = p;
+        out->g = q;
+        out->b = in->v;
+        break;
+    case 4:
+        out->r = t;
+        out->g = p;
+        out->b = in->v;
+        break;
+    case 5:
+    default:
+        out->r = in->v;
+        out->g = p;
+        out->b = q;
+        break;
+    }
+}
+
+static void gen_random_pastel(XColor* color, double hue) {
+	struct hsv hsv;
+	struct rgb rgb;
+	hsv.h = hue;
+	hsv.s = 0.6;
+	hsv.v = 0.95;
+	hsv2rgb(&hsv, &rgb);
+	color->red = (unsigned short) (rgb.r * 65535.0);
+	color->green = (unsigned short) (rgb.g * 65535.0);
+	color->blue = (unsigned short) (rgb.b * 65535.0);
 }
 
 static Lock *
@@ -180,6 +262,7 @@ lockscreen(Display *dpy, int screen) {
 	XColor color;
 	XSetWindowAttributes wa;
 	Cursor invisible;
+	double hue1, hue2, tmp;
 
 	if(dpy == NULL || screen < 0)
 		return NULL;
@@ -198,13 +281,25 @@ lockscreen(Display *dpy, int screen) {
 			DefaultVisual(dpy, lock->screen), CWOverrideRedirect | CWBackPixel, &wa);
 	
 	/* locked color */
-	gen_random_pastel(&color);
+	hue1 = (double) (rand() % 360);
+	gen_random_pastel(&color, hue1);
 	XAllocColor(dpy, DefaultColormap(dpy, lock->screen), &color);
 	lock->colors[0] = color.pixel;
 	XSetWindowBackground(dpy, lock->win, lock->colors[0]);
 	
 	/* trying to unlock color */
-	gen_random_pastel(&color);
+	hue2 = hue1;
+	while (hue2 == hue1) {
+		hue2 = (double) (rand() % 360);
+		tmp = hue2 - hue1;
+		if (tmp < 0.0) {
+			tmp += 360.0;
+		}
+		if (tmp < 100.0) {
+			hue2 = hue1;
+		}
+	}
+	gen_random_pastel(&color, hue2);
 	XAllocColor(dpy, DefaultColormap(dpy, lock->screen), &color);
 	lock->colors[1] = color.pixel;
 	
