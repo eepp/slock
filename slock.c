@@ -262,7 +262,7 @@ lockscreen(Display *dpy, int screen) {
 	XColor color;
 	XSetWindowAttributes wa;
 	Cursor invisible;
-	double hue1, hue2, tmp;
+	double hue1, hue2;
 
 	if(dpy == NULL || screen < 0)
 		return NULL;
@@ -288,17 +288,10 @@ lockscreen(Display *dpy, int screen) {
 	XSetWindowBackground(dpy, lock->win, lock->colors[0]);
 	
 	/* trying to unlock color */
-	hue2 = hue1;
-	while (hue2 == hue1) {
-		hue2 = (double) (rand() % 360);
-		tmp = hue2 - hue1;
-		if (tmp < 0.0) {
-			tmp += 360.0;
-		}
-		if (tmp < 100.0) {
-			hue2 = hue1;
-		}
-	}
+	hue2 = hue1 + 180.0;
+  if (hue2 >= 360.0) {
+    hue2 -= 360.0;
+  }
 	gen_random_pastel(&color, hue2);
 	XAllocColor(dpy, DefaultColormap(dpy, lock->screen), &color);
 	lock->colors[1] = color.pixel;
