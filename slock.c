@@ -32,18 +32,6 @@ typedef struct {
 	unsigned long colors[2];
 } Lock;
 
-struct rgb {
-    double r;       // percent
-    double g;       // percent
-    double b;       // percent
-};
-
-struct hsv {
-    double h;       // angle in degrees
-    double s;       // percent
-    double v;       // percent
-};
-
 static Lock **locks;
 static int nscreens;
 static Bool running = True;
@@ -179,79 +167,115 @@ unlockscreen(Display *dpy, Lock *lock) {
 	free(lock);
 }
 
-/* credit: <http://stackoverflow.com/questions/3018313/algorithm-to-convert-rgb-to-hsv-and-hsv-to-rgb> */
-static void hsv2rgb(struct hsv* in, struct rgb* out) {
-    double hh, p, q, t, ff;
-    long i;
+/**
+ * credit: <http://www.duatiu.com/HSL2RGB.cpp>
+ * This is a subfunction of HSLtoRGB
+ */
+static unsigned int HSLtoRGB_Subfunction(const float temp1, const float temp2, const float temp3)
+{
+	unsigned int c;
 
-    if (in->s <= 0.0) {       // < is bogus, just shuts up warnings
-        if (isnan(in->h)) {   // in.h == NAN
-            out->r = in->v;
-            out->g = in->v;
-            out->b = in->v;
-            return;
-        }
-        // error - should never happen
-        out->r = 0.0;
-        out->g = 0.0;
-        out->b = 0.0;
-        return;
-    }
-    hh = in->h;
-    if (hh >= 360.0) hh = 0.0;
-    hh /= 60.0;
-    i = (long) hh;
-    ff = hh - i;
-    p = in->v * (1.0 - in->s);
-    q = in->v * (1.0 - (in->s * ff));
-    t = in->v * (1.0 - (in->s * (1.0 - ff)));
-
-    switch(i) {
-    case 0:
-        out->r = in->v;
-        out->g = t;
-        out->b = p;
-        break;
-    case 1:
-        out->r = q;
-        out->g = in->v;
-        out->b = p;
-        break;
-    case 2:
-        out->r = p;
-        out->g = in->v;
-        out->b = t;
-        break;
-
-    case 3:
-        out->r = p;
-        out->g = q;
-        out->b = in->v;
-        break;
-    case 4:
-        out->r = t;
-        out->g = p;
-        out->b = in->v;
-        break;
-    case 5:
-    default:
-        out->r = in->v;
-        out->g = p;
-        out->b = q;
-        break;
-    }
+	if((temp3 * 6) < 1)
+		c = (unsigned int)((temp2 + (temp1 - temp2)*6*temp3)*100);
+	else
+		if((temp3 * 2) < 1)
+			c = (unsigned int)(temp1*100);
+		else
+			if((temp3 * 3) < 2)
+				c = (unsigned int)((temp2 + (temp1 - temp2)*(.66666 - temp3)*6)*100);
+			else
+				c = (unsigned int)(temp2*100);
+	return c;
 }
 
-static void gen_random_pastel(XColor* color, double hue) {
-	struct hsv hsv;
-	struct rgb rgb;
-	hsv.h = hue;
-	hsv.s = 0.6;
-	hsv.v = 0.95;
-	hsv2rgb(&hsv, &rgb);
-	color->red = (unsigned short) (rgb.r * 65535.0);
-	color->green = (unsigned short) (rgb.g * 65535.0);
-	color->blue = (unsigned short) (rgb.b * 65535.0);
+/**
+ * credit: <http://www.duatiu.com/HSL2RGB.cpp>
+ * This function converts the "color" object to the equivalent RGB values of
+ * the hue, saturation, and luminance passed as h, s, and l respectively
+ */
+static void HSLtoRGB(const unsigned int h, const unsigned int s, const unsigned int l,
+	unsigned int *rr, unsigned int *rg, unsigned int *rb)
+{
+	unsigned int r = 0;
+	unsigned int g = 0;
+	unsigned int b = 0;
+
+	float L = ((float)l)/100;
+	float S = ((float)s)/100;
+	float H = ((float)h)/360;
+
+	float temp1, temp2, temp3;
+
+	int i;
+
+	if(s == 0)
+	{
+		r = l;
+		g = l;
+		b = l;
+	}
+	else
+	{
+		temp1 = 0;
+		if(L < .50)
+		{
+			temp1 = L*(1 + S);
+		}
+		else
+		{
+			temp1 = L + S - (L*S);
+		}
+
+		temp2 = 2*L - temp1;
+
+		temp3 = 0;
+		for(i = 0 ; i < 3 ; i++)
+		{
+			switch(i)
+			{
+			case 0: // red
+				{
+					temp3 = H + .33333f;
+					if(temp3 > 1)
+						temp3 -= 1;
+					r = HSLtoRGB_Subfunction(temp1,temp2,temp3);
+					break;
+				}
+			case 1: // green
+				{
+					temp3 = H;
+					g = HSLtoRGB_Subfunction(temp1,temp2,temp3);
+					break;
+				}
+			case 2: // blue
+				{
+					temp3 = H - .33333f;
+					if(temp3 < 0)
+						temp3 += 1;
+					b = HSLtoRGB_Subfunction(temp1,temp2,temp3);
+					break;
+				}
+			default:
+				{
+
+				}
+			}
+		}
+	}
+
+	*rr = (unsigned int)((((float)r)/100)*255);
+	*rg = (unsigned int)((((float)g)/100)*255);
+	*rb = (unsigned int)((((float)b)/100)*255);
+}
+
+static void gen_random_pastel(XColor* color, unsigned int hue) {
+	unsigned int sat = 60, val = 55, r, g, b;
+
+	HSLtoRGB(hue, sat, val, &r, &g, &b);
+
+	color->red = (unsigned short) (r << 8);
+	color->green = (unsigned short) (g << 8);
+	color->blue = (unsigned short) (b << 8);
 }
 
 static Lock *
@@ -262,7 +286,7 @@ lockscreen(Display *dpy, int screen) {
 	XColor color;
 	XSetWindowAttributes wa;
 	Cursor invisible;
-	double hue1, hue2;
+	int hue1, hue2;
 
 	if(dpy == NULL || screen < 0)
 		return NULL;
@@ -281,17 +305,17 @@ lockscreen(Display *dpy, int screen) {
 			DefaultVisual(dpy, lock->screen), CWOverrideRedirect | CWBackPixel, &wa);
 	
 	/* locked color */
-	hue1 = (double) (rand() % 360);
+	hue1 = rand() % 360;
 	gen_random_pastel(&color, hue1);
 	XAllocColor(dpy, DefaultColormap(dpy, lock->screen), &color);
 	lock->colors[0] = color.pixel;
 	XSetWindowBackground(dpy, lock->win, lock->colors[0]);
 	
 	/* trying to unlock color */
-	hue2 = hue1 + 180.0;
-  if (hue2 >= 360.0) {
-    hue2 -= 360.0;
-  }
+	hue2 = hue1 + 180;
+	if (hue2 >= 360) {
+		hue2 -= 360;
+	}
 	gen_random_pastel(&color, hue2);
 	XAllocColor(dpy, DefaultColormap(dpy, lock->screen), &color);
 	lock->colors[1] = color.pixel;
