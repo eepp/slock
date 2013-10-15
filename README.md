@@ -27,5 +27,5 @@ Afterwards, enter the following command to build and install slock
 Running
 -------
 Simply invoke the `slock` command. To get out of it,
-enter your password and press Enter. You can press Escape to erase
+enter your password. You can press Escape to erase
 what you typed if you don't want to hit Backspace like crazy.
