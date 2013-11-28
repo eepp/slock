@@ -39,9 +39,7 @@ dist: clean
 install: all
 	@echo installing executable file to ${DESTDIR}${PREFIX}/bin
 	@mkdir -p ${DESTDIR}${PREFIX}/bin
-	@cp -f slock ${DESTDIR}${PREFIX}/bin
-	@chmod 755 ${DESTDIR}${PREFIX}/bin/slock
-	@chmod u+s ${DESTDIR}${PREFIX}/bin/slock
+	@install -Dm 4755 slock ${DESTDIR}${PREFIX}/bin/slock
 
 uninstall:
 	@echo removing executable file from ${DESTDIR}${PREFIX}/bin
