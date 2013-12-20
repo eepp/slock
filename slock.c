@@ -147,8 +147,6 @@ readpw(Display *dpy, const char *pws)
 #else
 					running = strcmp(crypt(passwd, pws), pws);
 #endif
-					if(running != False)
-						XBell(dpy, 100);
 				}
 				break;
 			}
